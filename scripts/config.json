@@ -1,0 +1,7 @@
+{
+  "_comment": "剪贴板助手配置文件 — 根据实际环境修改以下路径",
+  "save_dir": "~/Desktop/temp",
+  "_save_dir_note": "截图保存目录，支持 ~ 表示用户主目录",
+  "python_path": "",
+  "_python_path_note": "Python 解释器路径，留空则自动检测当前 python"
+}

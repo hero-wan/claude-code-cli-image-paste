@@ -1,32 +1,59 @@
 # 剪贴板助手
 
-## 项目概述
-在 Claude Code 对话中截图时，图片自动保存到桌面 `~/Desktop/temp/`，文件路径自动复制到系统剪贴板，可直接 Ctrl+V 粘贴到对话窗口。
+Claude Code（Windows 终端）截图后自动保存到桌面，文件路径复制到剪贴板，可直接 Ctrl+V 粘贴到对话窗口。
 
-## 自动运行机制
-Claude Code 会话启动时通过 Hook 自动启动剪贴板监听，会话结束时自动停止。支持多窗口协作——首个窗口启动监听，最后一个窗口关闭时停止。
+## 安装
 
-### 核心脚本（位于 `C:\Users\PC\.claude\scripts\`）
+### 1. 依赖
 
-| 脚本 | 作用 |
-|------|------|
-| `clipboard-monitor.py` | 后台循环监听剪贴板，发现截图自动保存并复制路径 |
-| `start-hook.py` | SessionStart Hook 调用，检查 PID 锁，未启动则开启监听 |
-| `stop-hook.py` | Stop Hook 调用，根据 PID 锁终止监听进程 |
+```bash
+pip install Pillow pywin32
+```
 
-### Hook 配置
-`settings.json` 中配置了两个 Hook：
-- **SessionStart** → `start-hook.py`（会话启动时自动开启监听）
-- **Stop** → `stop-hook.py`（会话结束时自动关闭监听）
+### 2. 配置 Hooks
 
-## 使用方式
-正常情况下无需手动操作，打开 Claude Code 窗口即可自动开始监听。
+将 `scripts/` 目录复制到你喜欢的路径（如 `C:\tools\cc-clipboard\`），然后在 Claude Code 的 `settings.json` 中添加：
+
+```json
+{
+  "hooks": {
+    "SessionStart": "python C:/tools/cc-clipboard/start-hook.py",
+    "Stop": "python C:/tools/cc-clipboard/stop-hook.py"
+  }
+}
+```
+
+> **注意**：路径中的 `\` 替换为 `/`，避免转义问题。
+
+### 3. 修改配置
+
+编辑 `scripts/config.json`：
+
+```json
+{
+  "save_dir": "~/Desktop/temp",
+  "python_path": ""
+}
+```
+
+| 配置项 | 说明 |
+|--------|------|
+| `save_dir` | 截图保存目录，支持 `~` 表示用户主目录 |
+| `python_path` | Python 解释器路径，留空自动检测当前 Python |
+
+## 使用
+
+打开 Claude Code 即可自动开始监听，无需手动操作。关闭 Claude Code 时自动停止。
 
 ## 文件说明
-- 图片保存目录：`~/Desktop/temp/`
-- PID 锁文件：`C:\Users\PC\.claude\scripts\.cc-monitor.lock`
 
-## 依赖
-- Pillow (`pip install Pillow`)
-- Python 3.12：`C:\Users\PC\AppData\Local\Programs\Python\Python312\python.exe`
-- Windows 环境（PowerShell 剪贴板操作）
+| 文件 | 作用 |
+|------|------|
+| `scripts/clipboard-monitor.py` | 后台监控剪贴板，检测截图自动保存 |
+| `scripts/start-hook.py` | SessionStart 钩子，检查防重复后启动监控 |
+| `scripts/stop-hook.py` | Stop 钩子，终止监控进程 |
+| `scripts/config.json` | 用户配置文件 |
+
+## 多窗口
+
+多窗口同时运行时，只有第一个窗口会启动监控，最后一个窗口关闭时停止。
