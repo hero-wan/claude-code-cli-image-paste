@@ -97,6 +97,7 @@ def main():
                     img.save(buf, "PNG")
                     h = hashlib.md5(buf.getvalue()).hexdigest()
                     if h != last_hash:
+                        SAVE_DIR.mkdir(parents=True, exist_ok=True)
                         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                         filepath = SAVE_DIR / f"screenshot_{ts}.png"
                         img.save(filepath, "PNG")
