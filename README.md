@@ -57,3 +57,16 @@ pip install Pillow pywin32
 ## 多窗口
 
 多窗口同时运行时，只有第一个窗口会启动监控，最后一个窗口关闭时停止。
+
+## 脚本同步说明
+
+如果 CC hooks 配置指向的路径与本项目路径不同（如全局 `~/.claude/scripts/`），需将 `scripts/` 下的文件**同步**到 hook 配置的目录：
+
+```
+start-hook.py  →  hook配置目录/start-hook.py
+stop-hook.py   →  hook配置目录/stop-hook.py
+clipboard-monitor.py  →  hook配置目录/clipboard-monitor.py
+config.json    →  hook配置目录/config.json
+```
+
+四个文件缺一不可。修改任一脚本后记得重新同步。
