@@ -84,6 +84,21 @@ def copy_to_clipboard(text):
     log("复制路径到剪贴板失败", "ERROR")
 
 
+def read_clipboard_image():
+    """尝试从剪贴板读取图片，成功返回 Image 对象，失败返回 None"""
+    for _ in range(5):
+        try:
+            if not win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_DIB):
+                return None  # 非图片内容，直接跳过
+            img = ImageGrab.grabclipboard()
+            if isinstance(img, Image.Image):
+                return img
+            return None
+        except Exception as e:
+            time.sleep(0.1)
+    return None
+
+
 def save_screenshot(img, last_hash_ref):
     """保存图片并返回新的 hash"""
     buf = BytesIO()
@@ -125,30 +140,9 @@ def main():
     def wnd_proc(hwnd, msg, wparam, lparam):
         if msg == WM_CLIPBOARDUPDATE:
             try:
-                # 重试打开剪贴板，避免与其他进程冲突
-                opened = False
-                for _ in range(5):
-                    try:
-                        win32clipboard.OpenClipboard()
-                        opened = True
-                        break
-                    except Exception:
-                        time.sleep(0.1)
-                if not opened:
-                    log("OpenClipboard 失败", "WARN")
-                    return 0
-
-                if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_DIB):
-                    img = ImageGrab.grabclipboard()
-                    if isinstance(img, Image.Image):
-                        save_screenshot(img, last_hash)
-
-                # ImageGrab.grabclipboard() 内部可能已经关闭了剪贴板，
-                # 所以 CloseClipboard 需要安全调用
-                try:
-                    win32clipboard.CloseClipboard()
-                except Exception:
-                    pass
+                img = read_clipboard_image()
+                if img is not None:
+                    save_screenshot(img, last_hash)
             except Exception as e:
                 log(f"处理剪贴板事件错误: {e}", "ERROR")
             return 0
