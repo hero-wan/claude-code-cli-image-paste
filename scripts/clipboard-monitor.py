@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-剪贴板监控 — 通过 Windows 剪贴板事件监听截图，自动保存到指定目录，
+剪贴板监控 — 通过 Windows 剪贴板序号轮询检测截图，自动保存到指定目录，
 并将文件路径复制到剪贴板，方便粘贴到对话窗口。
 
-使用 AddClipboardFormatListener + 消息窗口，避免轮询导致的桌面闪烁。
+使用 GetClipboardSequenceNumber 轻量轮询，不打开剪贴板，避免桌面闪烁。
 """
 import os, sys, hashlib, ctypes, time
 from io import BytesIO
@@ -11,9 +11,6 @@ from datetime import datetime
 from pathlib import Path
 
 import win32clipboard
-import win32gui
-import win32con
-import win32api
 from PIL import ImageGrab, Image
 
 # 脚本所在目录（自动检测，无需手动配置）
@@ -33,8 +30,6 @@ LOCK_FILE = SCRIPTS_DIR / ".cc-monitor.lock"
 
 # Windows API
 user32 = ctypes.windll.user32
-WM_CLIPBOARDUPDATE = 0x031D
-HWND_MESSAGE = -3
 
 
 def log(msg, level="INFO"):
@@ -94,7 +89,7 @@ def read_clipboard_image():
             if isinstance(img, Image.Image):
                 return img
             return None
-        except Exception as e:
+        except Exception:
             time.sleep(0.1)
     return None
 
@@ -116,9 +111,16 @@ def save_screenshot(img, last_hash_ref):
     return h
 
 
+def get_clipboard_sequence_number():
+    """获取剪贴板序列号，变化表示剪贴板内容已更新"""
+    user32.GetClipboardSequenceNumber.argtypes = []
+    user32.GetClipboardSequenceNumber.restype = ctypes.c_uint32
+    return user32.GetClipboardSequenceNumber()
+
+
 def main():
     log("=" * 50)
-    log("剪贴板监控服务启动（事件驱动模式）")
+    log("剪贴板监控服务启动（序列号轮询模式）")
 
     # PID 锁检查，防止重复启动
     if LOCK_FILE.exists():
@@ -135,59 +137,30 @@ def main():
     SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
     last_hash = [None]  # 用列表以便在闭包中修改
-    hwnd_clip = None
+    last_seq = get_clipboard_sequence_number()
 
-    def wnd_proc(hwnd, msg, wparam, lparam):
-        if msg == WM_CLIPBOARDUPDATE:
-            try:
-                img = read_clipboard_image()
-                if img is not None:
-                    save_screenshot(img, last_hash)
-            except Exception as e:
-                log(f"处理剪贴板事件错误: {e}", "ERROR")
-            return 0
-        return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+    log(f"开始监控剪贴板，保存目录: {SAVE_DIR}")
+    log(f"初始剪贴板序列号: {last_seq}")
 
     try:
-        log("开始监听剪贴板变化")
+        while True:
+            time.sleep(0.5)  # 500ms 轮询间隔
 
-        # 注册窗口类
-        class_name = "ClipboardMonitorWindow"
-        wc = win32gui.WNDCLASS()
-        wc.lpfnWndProc = wnd_proc
-        wc.lpszClassName = class_name
-        wc.hInstance = win32api.GetModuleHandle(None)
-        try:
-            win32gui.RegisterClass(wc)
-        except Exception:
-            pass  # 可能已注册
-
-        # 创建消息窗口（不可见）
-        hwnd_clip = win32gui.CreateWindowEx(
-            0, class_name, "Clipboard Monitor",
-            win32con.WS_OVERLAPPED,
-            0, 0, 0, 0,
-            HWND_MESSAGE, None, wc.hInstance, None
-        )
-
-        # 注册剪贴板格式监听
-        if not user32.AddClipboardFormatListener(hwnd_clip):
-            log("AddClipboardFormatListener 注册失败", "ERROR")
-            sys.exit(1)
-
-        log("事件监听已注册，等待剪贴板变化")
-
-        # 消息循环（阻塞，几乎不占 CPU）
-        win32gui.PumpMessages()
+            try:
+                current_seq = get_clipboard_sequence_number()
+                if current_seq != last_seq:
+                    last_seq = current_seq
+                    img = read_clipboard_image()
+                    if img is not None:
+                        save_screenshot(img, last_hash)
+            except Exception as e:
+                log(f"监控循环错误: {e}", "ERROR")
 
     except KeyboardInterrupt:
         log("收到中断信号")
     except Exception as e:
         log(f"监控服务异常: {e}", "ERROR")
     finally:
-        if hwnd_clip:
-            user32.RemoveClipboardFormatListener(hwnd_clip)
-            win32gui.DestroyWindow(hwnd_clip)
         remove_pid_lock()
         log("剪贴板监控服务停止")
 
