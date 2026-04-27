@@ -43,8 +43,15 @@ def log(msg, level="INFO"):
 
 
 def write_pid_lock():
-    with open(LOCK_FILE, "w") as f:
-        f.write(str(os.getpid()))
+    import json
+    lock_data = {
+        "pid": os.getpid(),
+        "name": "剪贴板监控助手",
+        "desc": "自动保存截图到桌面并复制路径，请勿随意终止",
+        "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    with open(LOCK_FILE, "w", encoding="utf-8") as f:
+        json.dump(lock_data, f, ensure_ascii=False, indent=2)
 
 
 def remove_pid_lock():
@@ -122,11 +129,19 @@ def main():
     log("=" * 50)
     log("剪贴板监控服务启动（序列号轮询模式）")
 
-    # PID 锁检查，防止重复启动
+    # 设置控制台窗口标题，方便任务管理器识别
+    ctypes.windll.kernel32.SetConsoleTitleW("剪贴板监控助手")
+
+    # PID 锁检查，防止重复启动（兼容旧格式纯数字和新格式 JSON）
     if LOCK_FILE.exists():
         try:
-            with open(LOCK_FILE) as f:
-                old_pid = int(f.read().strip())
+            with open(LOCK_FILE, encoding="utf-8") as f:
+                content = f.read().strip()
+            try:
+                import json
+                old_pid = int(json.loads(content)["pid"])
+            except Exception:
+                old_pid = int(content)
             if is_process_alive(old_pid):
                 log(f"另一个实例已在运行 (PID={old_pid})，退出")
                 sys.exit(0)

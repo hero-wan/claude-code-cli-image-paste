@@ -11,6 +11,22 @@ MONITOR = SCRIPTS_DIR / "clipboard-monitor.py"
 CONFIG_FILE = SCRIPTS_DIR / "config.json"
 
 
+def show_popup(msg, title="剪贴板助手", seconds=2):
+    """弹出 Windows 提示框，几秒后自动消失，不阻塞主进程"""
+    try:
+        script = (
+            f"var sh=new ActiveXObject('WScript.Shell');"
+            f"sh.Popup('{msg}', {seconds}, '{title}', 64);close()"
+        )
+        subprocess.Popen(
+            ["mshta", f"javascript:{script}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
 def get_python_path():
     """从 config.json 读取 Python 路径，未配置则用当前 Python"""
     if CONFIG_FILE.exists():
@@ -29,8 +45,13 @@ def is_alive():
     if not LOCK_FILE.exists():
         return False
     try:
-        with open(LOCK_FILE) as f:
-            pid = f.read().strip()
+        with open(LOCK_FILE, encoding="utf-8") as f:
+            content = f.read().strip()
+        try:
+            import json
+            pid = str(json.loads(content)["pid"])
+        except Exception:
+            pid = content
         r = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}"],
             capture_output=True, text=True
@@ -50,3 +71,6 @@ if not is_alive():
         stdin=subprocess.DEVNULL,
     )
     time.sleep(1)
+    show_popup("剪贴板监控已启动")
+else:
+    show_popup("剪贴板监控已在运行")
